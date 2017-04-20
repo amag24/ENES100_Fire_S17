@@ -1,0 +1,196 @@
+#include <enes100.h>
+#include <AFMotor.h>
+#include <Servo.h>
+
+//Initialize RF objects
+SoftwareSerial serial(2,9); //Sets digital pin 2 as Rx and 9 as Tx
+Marker marker(100); //Change marker number to match actual marker
+RF_Comm rf(&serial, &marker);
+
+//Declare the motor objects
+//First param is the port on the board
+//Second param is the frequency of the PWM signal
+AF_DCMotor motor1(1, MOTOR12_1KHZ); //Back right motor  
+AF_DCMotor motor2(2, MOTOR12_1KHZ); //Front right motor
+AF_DCMotor motor3(3, MOTOR12_1KHZ); //Front left motor
+AF_DCMotor motor4(4, MOTOR12_1KHZ); //Back left motor
+
+Servo servoZ; //Lower servo, rotates on Z axis
+Servo servoX; //Upper servo, rotates on X axis
+
+//Coords of the center of the fire site
+const float xCoord = 2900.0;
+const float yCoord = 1300.0;
+
+float frontDist;
+float leftDist;
+float rightDist;
+
+void setup() 
+{
+  //pinMode(AX, OUTPUT) set necessary analog pins to output
+  
+  Serial.begin(9600);
+
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  motor3.setSpeed(255);
+  motor4.setSpeed(255);
+
+  servoZ.attach(10);
+  //servoX.attach(AX);
+}
+
+void loop() 
+{
+  if(rf.updateLocation())
+  {
+    motorsOn();
+    delay(500);
+    
+    updateProx();
+    
+    if(frontDist <= 15.0) //True if an obstacle is within 15cm of the OSV
+    {
+      motorsOff();
+      turnBy(-PI/2);  //Turn right
+      updateProx();
+
+      do  //Move forward until obstacle (which is now on the left) is past
+      {
+        motorsOn();
+        delay(1000);
+      }while((13646*pow(analogRead(A1),-1.166)-leftDist)<=5.0);
+
+      motorsOff();
+      turnBy(PI/2); //Turn left
+    }
+  }
+  else  //If communication cannot be established
+  {
+    motorsOff();
+    rf.println("Cannot retrieve coordinates");
+    delay(1000);
+  }
+}
+
+void navigate(float xTarget, float yTarget)
+{
+  float error = 5.0;
+  bool destination = false;
+  rf.updateLocation();
+
+  //This if-else ladder determines where the OSV is in relation to the destination
+  //and determines the appropriate heading to reach the target coords
+  if(abs(marker.x-xTarget) < error && abs(marker.y-yTarget) < error)
+    destination = true; //No navigation needed
+  else if(marker.x < xTarget && abs(marker.y-yTarget) < error)
+    turnTo(0);
+  else if(marker.x > xTarget && abs(marker.y-yTarget) < error)
+    turnTo(PI);
+  else if(abs(marker.x-xTarget) < error && marker.y < yTarget)
+    turnTo(PI/2);
+  else if(abs(marker.x-xTarget) < error && marker.y > yTarget)
+    turnTo(-PI/2);
+  else
+  {
+    if(marker.x < xTarget && marker.y < yTarget)
+      turnTo(PI/4);
+    if(marker.x < xTarget && marker.y > yTarget)
+      turnTo(-PI/4);
+    if(marker.x > xTarget && marker.y < yTarget)
+      turnTo(3*PI/4);
+    if(marker.x > xTarget && marker.y > yTarget)
+      turnTo(-3*PI/4);
+  }
+
+  //The motors will turn on and drive the OSV in the correct direction,
+  //unless it is already at its destination
+  if(!destination)
+  {
+    motorsOn();
+    delay(2000);
+  }
+}
+
+//Function to turn OSV by a certain angle
+//Param is angle that OSV will turn
+void turnBy(float angle)
+{
+  rf.updateLocation();
+  float targetAngle = marker.theta + angle;
+  
+  while(abs(targetAngle-marker.theta) > 0.1)  //Testing may determine more appropriate tolerance
+  {
+    if(targetAngle > marker.theta)  //Left turn
+    {
+      motor1.run(BACKWARD); //Back right
+      motor2.run(BACKWARD); //Front right
+      motor3.run(FORWARD);  //Front left
+      motor4.run(FORWARD);  //Back left
+      delay(500);
+    }
+    if(targetAngle < marker.theta)  //Right turn
+    {
+      motor1.run(FORWARD);  //Back right
+      motor2.run(FORWARD);  //Front right
+      motor3.run(BACKWARD); //Front left
+      motor4.run(BACKWARD); //Back left
+      delay(500);
+    }
+
+    rf.updateLocation();
+  }
+}
+
+//Function to turn OSV to a certain angle
+//Param is target angle
+void turnTo(float targetAngle)
+{
+  rf.updateLocation();
+  
+  while(abs(targetAngle-marker.theta) > 0.1)  //Testing may determine more appropriate tolerance
+  {
+    if(targetAngle > marker.theta)  //Left turn
+    {
+      motor1.run(BACKWARD); //These statements are wrong, check motor mapping
+      motor2.run(FORWARD);
+      motor3.run(FORWARD);
+      motor4.run(BACKWARD);
+      delay(500);
+    }
+    if(targetAngle < marker.theta)  //Right turn
+    {
+      motor1.run(FORWARD);  //These statements are wrong, check motor mapping
+      motor2.run(BACKWARD);
+      motor3.run(BACKWARD);
+      motor4.run(FORWARD);
+      delay(500);
+    }
+
+    rf.updateLocation();
+  }
+}
+
+void updateProx() //Updates values of proximity sensors
+{
+  frontDist = 13646*pow(analogRead(A0),-1.166);
+  leftDist = 13646*pow(analogRead(A1),-1.166);
+  rightDist = 13646*pow(analogRead(A2),-1.166);
+}
+
+void motorsOn()
+{
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+  motor3.run(FORWARD);
+  motor4.run(FORWARD);
+}
+
+void motorsOff()
+{
+  motor1.run(RELEASE);
+  motor2.run(RELEASE);
+  motor3.run(RELEASE);
+  motor4.run(RELEASE);
+}
