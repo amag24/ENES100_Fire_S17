@@ -1,1 +1,120 @@
+#include <AFMotor.h>
+#include <enes100.h>
+SoftwareSerial serial(2,9); //Sets digital pin 2 as Rx and 9 as Tx
+Marker marker(115); //Change marker number to match actual marker
+RF_Comm rf(&serial, &marker);
 
+AF_DCMotor motor1(1, MOTOR12_1KHZ); //Back right motor  
+AF_DCMotor motor2(2, MOTOR12_1KHZ); //Front right motor
+AF_DCMotor motor3(3, MOTOR12_1KHZ); //Front left motor
+AF_DCMotor motor4(4, MOTOR12_1KHZ); //Back left motor
+void turnTo(float targetAngle){
+ if(rf.updateLocation())
+  {
+    float deg=((marker.theta)*180)/PI;
+  float error=(targetAngle)-deg;
+  while( abs(error)> 45)  //Testing may determine more appropriate tolerance
+  {
+    rf.print("Turning to: ");
+    rf.println(targetAngle);
+   
+    if(targetAngle > marker.theta)  //Left turn
+    {
+      motor1.run(FORWARD); //These statements are wrong, check motor mapping
+      motor2.run(FORWARD);
+      motor3.run(BACKWARD);
+      motor4.run(BACKWARD);
+      delay(400);
+      motor1.run(RELEASE); 
+      motor2.run(RELEASE);
+      motor3.run(RELEASE);
+      motor4.run(RELEASE);
+    }
+    else if(targetAngle < marker.theta)  //Right turn
+    {
+      motor1.run(BACKWARD);  //These statements are wrong, check motor mapping
+      motor2.run(BACKWARD);
+      motor3.run(FORWARD);
+      motor4.run(FORWARD);
+      delay(400);
+      motor1.run(RELEASE); 
+      motor2.run(RELEASE);
+      motor3.run(RELEASE);
+      motor4.run(RELEASE);
+    }
+    rf.updateLocation();
+    deg=((marker.theta)*180)/PI;
+    error=(targetAngle)-deg;
+    rf.print("New error: ");
+    rf.println(abs(error));
+    rf.print("Target: ");
+    rf.println(targetAngle);
+    rf.print("Read angle: ");
+    rf.println(marker.theta);
+     }
+   while( abs(error)> 20)  //Testing may determine more appropriate tolerance
+  {
+    rf.println("Approaching correct angle");
+  
+    if(targetAngle > marker.theta)  //Left turn
+    {
+      motor1.run(FORWARD); //These statements are wrong, check motor mapping
+      motor2.run(FORWARD);
+      motor3.run(BACKWARD);
+      motor4.run(BACKWARD);
+      delay(100);
+      motor1.run(RELEASE); 
+      motor2.run(RELEASE);
+      motor3.run(RELEASE);
+      motor4.run(RELEASE);
+    }
+    else if(targetAngle < marker.theta)  //Right turn
+    {
+      motor1.run(BACKWARD);  //These statements are wrong, check motor mapping
+      motor2.run(BACKWARD);
+      motor3.run(FORWARD);
+      motor4.run(FORWARD);
+      delay(100);
+      motor1.run(RELEASE); 
+      motor2.run(RELEASE);
+      motor3.run(RELEASE);
+      motor4.run(RELEASE);
+    }
+    rf.updateLocation();
+    deg=((marker.theta)*180)/PI;
+    error=(targetAngle)-deg;
+    rf.print("New error: ");
+    rf.println(abs(error));
+    rf.print("Target: ");
+    rf.println(targetAngle);
+    rf.print("Read angle: ");
+    rf.println(marker.theta);
+     }
+  }
+  else
+  {
+    rf.println("Cannot retrieve coords");
+  }
+  rf.println("FINISHED TURNING");
+  }
+
+
+void setup() {
+  // put your setup code here, to run once:
+ Serial.begin(9600);
+
+  motor1.setSpeed(255);
+  motor2.setSpeed(255);
+  motor3.setSpeed(255);
+  motor4.setSpeed(255);
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  
+turnTo(45);
+delay(2000);
+ 
+
+
+}
